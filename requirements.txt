@@ -12,3 +12,4 @@ psycopg2-binary
 Flask-WTF
 WTForms
 email-validator
+openai>=1.0.0
