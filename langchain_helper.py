@@ -29,45 +29,35 @@ def extract_text(file, filetype):
 
 
 def get_qa_chain(text):
-    openai_key = os.getenv("OPENAI_API_KEY")
-    if not openai_key:
-        raise EnvironmentError("Missing OPENAI_API_KEY. Set it in your environment variables.")
-
     try:
-        # Initialize embeddings and LLM
-        embeddings = OpenAIEmbeddings(openai_api_key=openai_key)
-        llm = ChatOpenAI(
-            model_name="gpt-3.5-turbo",
-            temperature=0,
-            openai_api_key=openai_key
-        )
+        openai_key = os.getenv("OPENAI_API_KEY")
+        if not openai_key:
+            raise ValueError("Missing OPENAI_API_KEY")
 
-        # Smart text splitting
+        embeddings = OpenAIEmbeddings(openai_api_key=openai_key)
+        llm = ChatOpenAI(model_name="gpt-3.5-turbo", openai_api_key=openai_key)
+
         text_splitter = RecursiveCharacterTextSplitter(
-            chunk_size=500,
-            chunk_overlap=50,
+            chunk_size=1000,
+            chunk_overlap=150,
             separators=["\n\n", "\n", ".", " ", ""]
         )
         chunks = text_splitter.split_text(text)
         documents = [Document(page_content=chunk, metadata={"source": "uploaded_file"}) for chunk in chunks]
 
-        # FAISS vector store
         vectorstore = FAISS.from_documents(documents, embeddings)
         retriever = vectorstore.as_retriever(search_kwargs={"k": 5})
 
-        # Prompt
         prompt_template = PromptTemplate.from_template("""
-You are a document analyzer. Answer the question asked based on the context in a clear and detailed way.
-If the context is not related to the document, reply: "I don't know".
+        You are a document analyzer. Answer the question in detail based on the context.
+        If the question is not related to the document, reply with "I don't know".
 
-Context:
-{context}
+        Context:
+        {context}
 
-Question: {question}
-Answer:
-""")
+        Question: {question}
+        Answer:""")
 
-        # QA Chain
         qa_chain = RetrievalQA.from_chain_type(
             llm=llm,
             retriever=retriever,
@@ -79,5 +69,6 @@ Answer:
         return qa_chain
 
     except Exception as e:
-        print(f"[ERROR] Failed to initialize QA chain: {e}")
-        raise RuntimeError("An error occurred while setting up the QA chain. Please check the logs for details.")
+        print(f"[get_qa_chain ERROR]: {e}")
+        raise e
+
