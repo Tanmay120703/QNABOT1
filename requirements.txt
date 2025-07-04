@@ -14,3 +14,4 @@ WTForms
 email-validator
 openai>=1.0.0
 tiktoken
+faiss-cpu
