@@ -9,3 +9,6 @@ langchain
 langchain-community
 gunicorn
 psycopg2-binary
+Flask-WTF
+WTForms
+email-validator
