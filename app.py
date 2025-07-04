@@ -122,6 +122,11 @@ def utility_processor():
         }.get(ext, 'fa-solid fa-file text-white')
     return dict(get_icon_class=get_icon_class)
 
+@app.route('/initdb')
+def initdb():
+    db.create_all()
+    return "✅ Database tables created!"
+
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
