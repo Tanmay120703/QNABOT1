@@ -15,3 +15,4 @@ openai
 faiss-cpu
 sentence-transformers
 tqdm
+docx
