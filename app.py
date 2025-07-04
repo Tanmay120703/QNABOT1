@@ -1,14 +1,16 @@
+import os
 from flask import Flask, render_template, request, redirect, session, url_for, flash
 from werkzeug.utils import secure_filename
 from werkzeug.security import generate_password_hash, check_password_hash
 from models import db, User, Upload
 from langchain_helper import extract_text, get_qa_chain
 from forms import LoginForm, SignupForm
-import os
 from dotenv import load_dotenv
+
+# Load .env vars
 load_dotenv()
 
-
+# Fix Render postgres URI
 if os.getenv('DATABASE_URL', '').startswith('postgres://'):
     os.environ['DATABASE_URL'] = os.getenv('DATABASE_URL').replace('postgres://', 'postgresql://', 1)
 
@@ -74,9 +76,11 @@ def upload():
     filename = secure_filename(file.filename)
     filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
     file.save(filepath)
-    file_ext = filename.split('.')[-1]
+
+    file_ext = filename.split('.')[-1].lower()
     with open(filepath, "rb") as f:
         content = extract_text(f, file_ext)
+
     new_upload = Upload(user_id=session['user_id'], filename=filename, content=content)
     db.session.add(new_upload)
     db.session.commit()
@@ -92,21 +96,23 @@ def qa(upload_id):
 
     if request.method == 'POST':
         question = request.form['question']
-        qa_chain = get_qa_chain(upload.content)
-        result = qa_chain(question)
-        answer = result['result']
+        try:
+            qa_chain = get_qa_chain(upload.content)
+            result = qa_chain(question)
+            answer = result['result']
 
-      
-        source_docs = result.get('source_documents', [])
-        page_numbers = []
-        for doc in source_docs:
-            metadata = getattr(doc, 'metadata', {})
-            page = metadata.get('page')
-            if page is not None:
-                page_numbers.append(str(page))
-        if not page_numbers:
-            page_numbers = ['1']
-        sources = f"page no: {', '.join(sorted(set(page_numbers), key=int))}"
+            # Extract source page numbers
+            source_docs = result.get('source_documents', [])
+            page_numbers = []
+            for doc in source_docs:
+                page = doc.metadata.get('page')
+                if page is not None:
+                    page_numbers.append(str(page))
+            sources = f"page no: {', '.join(sorted(set(page_numbers), key=int))}" if page_numbers else "page no: 1"
+        except Exception as e:
+            answer = "❌ Error processing the question. Please try again."
+            sources = None
+            print(f"[QA ERROR] {e}")
 
     return render_template('qa.html', upload=upload, answer=answer, sources=sources)
 
@@ -119,6 +125,7 @@ def utility_processor():
             'docx': 'fa-solid fa-file-word text-primary',
             'doc': 'fa-solid fa-file-word text-primary',
             'txt': 'fa-solid fa-file-lines text-light',
+            'csv': 'fa-solid fa-file-csv text-warning'
         }.get(ext, 'fa-solid fa-file text-white')
     return dict(get_icon_class=get_icon_class)
 

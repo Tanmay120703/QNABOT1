@@ -1,5 +1,5 @@
 import os
-import fitz  # PyMuPDF for PDF handling
+import fitz  # PyMuPDF
 import docx
 import pandas as pd
 
@@ -10,6 +10,7 @@ from langchain_community.vectorstores import FAISS
 from langchain_community.chat_models import ChatOpenAI
 from langchain.chains import RetrievalQA
 from langchain.prompts import PromptTemplate
+
 
 def extract_text(file, filetype):
     if filetype == "pdf":
@@ -26,41 +27,57 @@ def extract_text(file, filetype):
     else:
         return file.read().decode("utf-8")
 
+
 def get_qa_chain(text):
     openai_key = os.getenv("OPENAI_API_KEY")
     if not openai_key:
-        raise ValueError("Missing OPENAI_API_KEY")
+        raise EnvironmentError("Missing OPENAI_API_KEY. Set it in your environment variables.")
 
-    embeddings = OpenAIEmbeddings(openai_api_key=openai_key)
-    llm = ChatOpenAI(model_name="gpt-3.5-turbo", openai_api_key=openai_key)
+    try:
+        # Initialize embeddings and LLM
+        embeddings = OpenAIEmbeddings(openai_api_key=openai_key)
+        llm = ChatOpenAI(
+            model_name="gpt-3.5-turbo",
+            temperature=0,
+            openai_api_key=openai_key
+        )
 
-    text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=1000,
-        chunk_overlap=150,
-        separators=["\n\n", "\n", ".", " ", ""]
-    )
-    chunks = text_splitter.split_text(text)
-    documents = [Document(page_content=chunk, metadata={"source": "uploaded_file"}) for chunk in chunks]
+        # Smart text splitting
+        text_splitter = RecursiveCharacterTextSplitter(
+            chunk_size=500,
+            chunk_overlap=50,
+            separators=["\n\n", "\n", ".", " ", ""]
+        )
+        chunks = text_splitter.split_text(text)
+        documents = [Document(page_content=chunk, metadata={"source": "uploaded_file"}) for chunk in chunks]
 
-    vectorstore = FAISS.from_documents(documents, embeddings)
-    retriever = vectorstore.as_retriever(search_kwargs={"k": 5})
+        # FAISS vector store
+        vectorstore = FAISS.from_documents(documents, embeddings)
+        retriever = vectorstore.as_retriever(search_kwargs={"k": 5})
 
-    prompt_template = PromptTemplate.from_template("""
-You are a docuemnt analyzer , answer the question asked in detailed and in context,
-if the contextis not related to the document , reply I dont know
+        # Prompt
+        prompt_template = PromptTemplate.from_template("""
+You are a document analyzer. Answer the question asked based on the context in a clear and detailed way.
+If the context is not related to the document, reply: "I don't know".
 
 Context:
 {context}
 
 Question: {question}
-Answer:""")
+Answer:
+""")
 
-    qa_chain = RetrievalQA.from_chain_type(
-        llm=llm,
-        retriever=retriever,
-        chain_type="stuff",
-        chain_type_kwargs={"prompt": prompt_template},
-        return_source_documents=True
-    )
+        # QA Chain
+        qa_chain = RetrievalQA.from_chain_type(
+            llm=llm,
+            retriever=retriever,
+            chain_type="stuff",
+            chain_type_kwargs={"prompt": prompt_template},
+            return_source_documents=True
+        )
 
-    return qa_chain
+        return qa_chain
+
+    except Exception as e:
+        print(f"[ERROR] Failed to initialize QA chain: {e}")
+        raise RuntimeError("An error occurred while setting up the QA chain. Please check the logs for details.")
