@@ -9,12 +9,11 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
-# 🔐 Fix for old postgres:// URLs from Render
 if os.getenv('DATABASE_URL', '').startswith('postgres://'):
     os.environ['DATABASE_URL'] = os.getenv('DATABASE_URL').replace('postgres://', 'postgresql://', 1)
 
 app = Flask(__name__)
-app.secret_key = os.getenv('SECRET_KEY', 'your-secret-key')  # Use environment variable in production
+app.secret_key = os.getenv('SECRET_KEY', 'your-secret-key')
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['UPLOAD_FOLDER'] = 'uploads'
@@ -97,7 +96,7 @@ def qa(upload_id):
         result = qa_chain(question)
         answer = result['result']
 
-        # Extract page numbers
+      
         source_docs = result.get('source_documents', [])
         page_numbers = []
         for doc in source_docs:
@@ -125,5 +124,5 @@ def utility_processor():
 
 if __name__ == '__main__':
     with app.app_context():
-        db.create_all()  # For quick testing — in production, consider Flask-Migrate
-    app.run(debug=True)
+        db.create_all()
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
