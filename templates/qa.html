@@ -1,0 +1,77 @@
+{% extends 'base.html' %}
+{% block title %}QA - {{ upload.filename }}{% endblock %}
+
+{% block content %}
+<style>
+    body {
+        background-image: url("{{ url_for('static', filename='ChatGPT-Image-Jun-19,-2025,-11_28_20-AM.png') }}");
+        background-size: cover;
+        background-position: center;
+        background-attachment: fixed;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        color: white;
+    }
+
+    .qa-container h2 {
+        font-size: 1.5rem;
+        margin-bottom: 1rem;
+        font-weight: bold;
+        color: #ffffff;
+    }
+
+    form {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 0.5rem;
+        margin-bottom: 1.5rem;
+        flex-wrap: wrap;
+    }
+
+    form input[type="text"] {
+        padding: 10px;
+        font-size: 1rem;
+        border-radius: 6px;
+        border: 1px solid #ccc;
+        width: 70%;
+        background-color: rgba(255, 255, 255, 0.1);
+        color: white;
+    }
+
+    form input::placeholder {
+        color: #ccc;
+    }
+
+    form button {
+        padding: 10px 20px;
+        font-size: 1rem;
+        border-radius: 6px;
+        border: none;
+        background-color: #007BFF;
+        color: white;
+        cursor: pointer;
+    }
+
+
+
+    h4 strong {
+        color: #ffc107;
+    }
+</style>
+
+<div class="qa-container">
+    <h2>Q&A for {{ upload.filename }}</h2>
+    <form method="post">
+        <input type="text" name="question" placeholder="Ask a question..." required>
+        <button type="submit">Ask</button>
+    </form>
+
+    {% if answer %}
+        <h3>Answer:</h3>
+        <p>{{ answer }}</p>
+        {% if sources %}
+            <h4><strong>Sources:</strong> {{ sources | safe }}</h4>
+        {% endif %}
+    {% endif %}
+</div>
+{% endblock %}
