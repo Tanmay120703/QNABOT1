@@ -16,3 +16,5 @@ faiss-cpu
 sentence-transformers
 tqdm
 docx
+exceptions
+Werkzeug
