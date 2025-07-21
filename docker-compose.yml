@@ -1,7 +1,8 @@
+version: "3.9"
+
 services:
   db:
-    image: postgres:13
-    container_name: postgres_db
+    image: postgres
     restart: always
     environment:
       POSTGRES_USER: postgres
@@ -12,18 +13,14 @@ services:
     ports:
       - "5432:5432"
 
-  web:
+  flask_app:
     build: .
-    container_name: flask_app
     ports:
       - "5000:5000"
     depends_on:
       - db
     environment:
-      FLASK_ENV: development
-      DATABASE_URL: postgresql://postgres:tanmay12345@db:5432/model
-    volumes:
-      - .:/app
+      - DATABASE_URL=postgresql://postgres:tanmay12345@db:5432/model
 
 volumes:
   postgres_data:

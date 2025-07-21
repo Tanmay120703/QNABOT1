@@ -22,7 +22,7 @@ def load_user(user_id):
 
 
 
-app.config['SQLALCHEMY_DATABASE_URI']  = os.getenv("DATABASE_URL")
+app.config["SQLALCHEMY_DATABASE_URI"] = os.environ["DATABASE_URL"]
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 
