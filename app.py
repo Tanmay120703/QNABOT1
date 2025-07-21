@@ -3,7 +3,7 @@ from flask import Flask, render_template, request, redirect, url_for, flash, ses
 from werkzeug.utils import secure_filename
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
-
+import os
 from models import db, User, Upload
 from forms import LoginForm, SignupForm
 from langchain_helper import extract_text, create_faiss_index, get_qa_chain
@@ -22,7 +22,7 @@ def load_user(user_id):
 
 
 
-app.config['SQLALCHEMY_DATABASE_URI'] = "postgresql://postgres:tanmay12345%4012@localhost:5432/model"
+app.config['SQLALCHEMY_DATABASE_URI']  = os.getenv("DATABASE_URL")
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 
