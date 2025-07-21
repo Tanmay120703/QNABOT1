@@ -5,7 +5,7 @@ services:
     restart: always
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: tanmay12345%4012
+      POSTGRES_PASSWORD: tanmay12345
       POSTGRES_DB: model
     volumes:
       - postgres_data:/var/lib/postgresql/data
@@ -21,7 +21,7 @@ services:
       - db
     environment:
       FLASK_ENV: development
-      DATABASE_URL: postgresql://postgres:tanmay12345%4012@db:5432/model
+      DATABASE_URL: postgresql://postgres:tanmay12345@db:5432/model
     volumes:
       - .:/app
 
