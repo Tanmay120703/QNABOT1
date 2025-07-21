@@ -1,27 +1,36 @@
 import os
-from flask import Flask, render_template, request, redirect, session, url_for, flash
+from flask import Flask, render_template, request, redirect, url_for, flash, session
 from werkzeug.utils import secure_filename
 from werkzeug.security import generate_password_hash, check_password_hash
+from flask_login import LoginManager, login_user, logout_user, login_required, current_user
+
 from models import db, User, Upload
-from langchain_helper import extract_text, get_qa_chain
 from forms import LoginForm, SignupForm
-from dotenv import load_dotenv
-
-# Load .env vars
-load_dotenv()
-
-# Fix Render postgres URI
-if os.getenv('DATABASE_URL', '').startswith('postgres://'):
-    os.environ['DATABASE_URL'] = os.getenv('DATABASE_URL').replace('postgres://', 'postgresql://', 1)
+from langchain_helper import extract_text, create_faiss_index, get_qa_chain
 
 app = Flask(__name__)
-app.secret_key = os.getenv('SECRET_KEY', 'your-secret-key')
-app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL')
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['UPLOAD_FOLDER'] = 'uploads'
+app.secret_key = "b2f8923f2e584937a7fd5b6bcbdcf1046e354a3b03c51f1e"
 
+
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = "login"
+
+@login_manager.user_loader
+def load_user(user_id):
+    return db.session.get(User, int(user_id))
+
+
+
+app.config['SQLALCHEMY_DATABASE_URI'] = "postgresql://postgres:tanmay12345%4012@localhost:5432/model"
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+
+app.config['UPLOAD_FOLDER'] = 'uploads'
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+
 db.init_app(app)
+
 
 @app.route('/', methods=['GET', 'POST'])
 def login():
@@ -29,7 +38,7 @@ def login():
     if form.validate_on_submit():
         user = User.query.filter_by(username=form.username.data.strip().lower()).first()
         if user and check_password_hash(user.password_hash, form.password.data):
-            session['user_id'] = user.id
+            login_user(user)
             return redirect(url_for('dashboard'))
         flash('Invalid username or password.', 'danger')
     return render_template('login.html', form=form)
@@ -41,7 +50,7 @@ def signup():
         username = form.username.data.strip().lower()
         existing_user = User.query.filter_by(username=username).first()
         if existing_user:
-            flash('Username already exists. Please choose a different one.', 'danger')
+            flash('Username already exists.', 'danger')
         else:
             hashed_pw = generate_password_hash(form.password.data)
             new_user = User(
@@ -57,64 +66,70 @@ def signup():
     return render_template('signup.html', form=form)
 
 @app.route('/logout')
+@login_required
 def logout():
-    session.clear()
+    logout_user()
     return redirect(url_for('login'))
 
 @app.route('/dashboard')
+@login_required
 def dashboard():
-    if 'user_id' not in session:
-        return redirect(url_for('login'))
-    uploads = Upload.query.filter_by(user_id=session['user_id']).all()
+    uploads = Upload.query.filter_by(user_id=current_user.id).all()
     return render_template('dashboard.html', uploads=uploads)
 
-@app.route('/upload', methods=['POST'])
+@app.route("/upload", methods=["POST"])
+@login_required
 def upload():
-    if 'user_id' not in session:
-        return redirect(url_for('login'))
+    if 'file' not in request.files:
+        flash('No file part', 'danger')
+        return redirect(url_for('dashboard'))
+
     file = request.files['file']
+    if file.filename == '':
+        flash('No selected file', 'danger')
+        return redirect(url_for('dashboard'))
+
+    # Save file to disk
+    uploads_dir = os.path.join(app.config['UPLOAD_FOLDER'], 'files')
+    os.makedirs(uploads_dir, exist_ok=True)
     filename = secure_filename(file.filename)
-    filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-    file.save(filepath)
+    file_path = os.path.join(uploads_dir, filename)
+    file.save(file_path)
 
-    file_ext = filename.split('.')[-1].lower()
-    with open(filepath, "rb") as f:
-        content = extract_text(f, file_ext)
 
-    new_upload = Upload(user_id=session['user_id'], filename=filename, content=content)
-    db.session.add(new_upload)
+    text_content = extract_text(file_path)
+
+
+    upload = Upload(user_id=current_user.id, filename=filename, content=text_content)
+    db.session.add(upload)
     db.session.commit()
-    return redirect(url_for('dashboard'))
 
-@app.route('/qa/<int:upload_id>', methods=['GET', 'POST'])
+
+    faiss_dir = os.path.join(app.config['UPLOAD_FOLDER'], 'faiss', str(upload.id))
+    os.makedirs(faiss_dir, exist_ok=True)
+    create_faiss_index(text_content, faiss_dir)
+
+    flash(" File uploaded and FAISS index created!", "success")
+    return redirect(url_for("dashboard"))
+
+@app.route("/qa/<int:upload_id>", methods=["GET", "POST"])
 def qa(upload_id):
-    if 'user_id' not in session:
-        return redirect(url_for('login'))
-
     upload = Upload.query.get_or_404(upload_id)
-    answer = sources = None
 
-    if request.method == 'POST':
-        question = request.form['question']
+    answer = None
+    if request.method == "POST":
+        question = request.form.get("question")
         try:
-            qa_chain = get_qa_chain(upload.content)
-            result = qa_chain(question)
-            answer = result['result']
-
-            # Extract source page numbers
-            source_docs = result.get('source_documents', [])
-            page_numbers = []
-            for doc in source_docs:
-                page = doc.metadata.get('page')
-                if page is not None:
-                    page_numbers.append(str(page))
-            sources = f"page no: {', '.join(sorted(set(page_numbers), key=int))}" if page_numbers else "page no: 1"
+            faiss_dir = os.path.join("uploads", "faiss", str(upload.id))
+            qa_chain = get_qa_chain(faiss_dir)
+            result = qa_chain.invoke({"query": question})   
+            answer = result["result"]
         except Exception as e:
+            print("[QA ERROR]", e)
             answer = "❌ Error processing the question. Please try again."
-            sources = None
-            print(f"[QA ERROR] {e}")
 
-    return render_template('qa.html', upload=upload, answer=answer, sources=sources)
+    return render_template("qa.html", upload=upload, answer=answer)
+
 
 @app.context_processor
 def utility_processor():
@@ -132,9 +147,9 @@ def utility_processor():
 @app.route('/initdb')
 def initdb():
     db.create_all()
-    return "✅ Database tables created!"
+    return " Database tables created!"
 
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
+    app.run(host="0.0.0.0", port=5000)

@@ -7,28 +7,34 @@
     height: 100%;
     margin: 0;
     padding: 0;
-    overflow: hidden; /* Disable scrolling */
+    overflow: hidden;
+    background-color: #f8f9fa;
   }
 
   .signup-wrapper {
     height: 100vh;
     display: flex;
     justify-content: center;
-    align-items: flex-start; /* start from top */
-    padding-top: 50px; /* push the form a bit down */
+    align-items: flex-start;
+    padding-top: 50px;
   }
 
   .signup-card {
     width: 100%;
     max-width: 500px;
     padding: 2rem;
-    box-shadow: 0 0 10px rgba(0,0,0,0.1);
     border-radius: 10px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+    background: #fff;
+  }
+
+  .signup-card h2 {
+    font-weight: 600;
   }
 </style>
 
 <div class="signup-wrapper">
-  <div class="signup-card bg-white text-dark">
+  <div class="signup-card">
     <h2 class="text-center mb-4">Create an Account</h2>
 
     <form method="post" novalidate>
@@ -36,35 +42,50 @@
 
       <div class="mb-3">
         {{ form.username.label(class="form-label fw-semibold") }}
-        {{ form.username(class="form-control") }}
+        {{ form.username(class="form-control", placeholder="Choose a username") }}
+        {% if form.username.errors %}
+          <div class="text-danger small mt-1">{{ form.username.errors[0] }}</div>
+        {% endif %}
       </div>
 
       <div class="mb-3">
         {{ form.password.label(class="form-label fw-semibold") }}
-        {{ form.password(class="form-control") }}
+        {{ form.password(class="form-control", placeholder="Create a password") }}
+        {% if form.password.errors %}
+          <div class="text-danger small mt-1">{{ form.password.errors[0] }}</div>
+        {% endif %}
       </div>
 
       <div class="mb-3">
         {{ form.confirm_password.label(class="form-label fw-semibold") }}
-        {{ form.confirm_password(class="form-control") }}
+        {{ form.confirm_password(class="form-control", placeholder="Confirm your password") }}
+        {% if form.confirm_password.errors %}
+          <div class="text-danger small mt-1">{{ form.confirm_password.errors[0] }}</div>
+        {% endif %}
       </div>
 
       <div class="mb-3">
         {{ form.dob.label(class="form-label fw-semibold") }}
         {{ form.dob(class="form-control", type="date") }}
+        {% if form.dob.errors %}
+          <div class="text-danger small mt-1">{{ form.dob.errors[0] }}</div>
+        {% endif %}
       </div>
 
       <div class="mb-4">
         {{ form.gender.label(class="form-label fw-semibold") }}
         {{ form.gender(class="form-select") }}
+        {% if form.gender.errors %}
+          <div class="text-danger small mt-1">{{ form.gender.errors[0] }}</div>
+        {% endif %}
       </div>
 
       <div class="d-grid">
-        {{ form.submit(class="btn btn-primary") }}
+        {{ form.submit(class="btn btn-primary btn-lg") }}
       </div>
 
       <div class="text-center mt-3">
-        <small>Already have an account? <a href="{{ url_for('login') }}">Log in</a></small>
+        <small class="text-muted">Already have an account? <a href="{{ url_for('login') }}">Log in</a></small>
       </div>
     </form>
   </div>

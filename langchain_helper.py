@@ -3,6 +3,7 @@ import fitz  # PyMuPDF
 import docx
 import pandas as pd
 
+from dotenv import load_dotenv
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.docstore.document import Document
 from langchain_community.embeddings import OpenAIEmbeddings
@@ -11,64 +12,94 @@ from langchain_community.chat_models import ChatOpenAI
 from langchain.chains import RetrievalQA
 from langchain.prompts import PromptTemplate
 
+load_dotenv()
 
-def extract_text(file, filetype):
-    if filetype == "pdf":
-        doc = fitz.open(stream=file.read(), filetype="pdf")
+def extract_text(file_path):
+    """
+    Extracts text from PDF, DOCX, CSV, or TXT file.
+    """
+    ext = file_path.split(".")[-1].lower()
+    text = ""
+
+    if ext == "pdf":
+        doc = fitz.open(file_path)
         text = "".join([page.get_text() for page in doc])
-        return text
-    elif filetype == "docx":
-        doc = docx.Document(file)
+
+    elif ext == "docx":
+        doc = docx.Document(file_path)
         text = "\n".join([para.text for para in doc.paragraphs])
-        return text
-    elif filetype == "csv":
-        df = pd.read_csv(file)
-        return df.to_string(index=False)
+
+    elif ext == "csv":
+        df = pd.read_csv(file_path)
+        text = df.to_string(index=False)
+
+    elif ext == "txt":
+        with open(file_path, "r", encoding="utf-8") as f:
+            text = f.read()
+
     else:
-        return file.read().decode("utf-8")
+        raise ValueError(f"Unsupported file type: {ext}")
+
+    return text
 
 
-def get_qa_chain(text):
-    try:
-        openai_key = os.getenv("OPENAI_API_KEY")
-        if not openai_key:
-            raise ValueError("Missing OPENAI_API_KEY")
+def create_faiss_index(text, faiss_dir):
+    """
+    Create a FAISS index from extracted text and save to faiss_dir.
+    """
+    openai_key = os.getenv("OPENAI_API_KEY")
+    embeddings = OpenAIEmbeddings(openai_api_key=openai_key)
 
-        embeddings = OpenAIEmbeddings(openai_api_key=openai_key)
-        llm = ChatOpenAI(model_name="gpt-3.5-turbo", openai_api_key=openai_key)
+    text_splitter = RecursiveCharacterTextSplitter(
+        chunk_size=1000,
+        chunk_overlap=150,
+        separators=["\n\n", "\n", ".", " ", ""]
+    )
 
-        text_splitter = RecursiveCharacterTextSplitter(
-            chunk_size=1000,
-            chunk_overlap=150,
-            separators=["\n\n", "\n", ".", " ", ""]
-        )
-        chunks = text_splitter.split_text(text)
-        documents = [Document(page_content=chunk, metadata={"source": "uploaded_file"}) for chunk in chunks]
+    chunks = text_splitter.split_text(text)
+    documents = [Document(page_content=chunk) for chunk in chunks]
 
-        vectorstore = FAISS.from_documents(documents, embeddings)
-        retriever = vectorstore.as_retriever(search_kwargs={"k": 5})
+    vectorstore = FAISS.from_documents(documents, embeddings)
 
-        prompt_template = PromptTemplate.from_template("""
-        You are a document analyzer. Answer the question in detail based on the context.
-        If the question is not related to the document, reply with "I don't know".
+    os.makedirs(faiss_dir, exist_ok=True)
+    vectorstore.save_local(faiss_dir)
 
-        Context:
-        {context}
+    print(f"✅ FAISS index saved to: {faiss_dir}")
 
-        Question: {question}
-        Answer:""")
 
-        qa_chain = RetrievalQA.from_chain_type(
-            llm=llm,
-            retriever=retriever,
-            chain_type="stuff",
-            chain_type_kwargs={"prompt": prompt_template},
-            return_source_documents=True
-        )
+def get_qa_chain(faiss_path):
+    openai_key = os.getenv("OPENAI_API_KEY")
+    embeddings = OpenAIEmbeddings(openai_api_key=openai_key)
+    llm = ChatOpenAI(model_name="gpt-3.5-turbo", openai_api_key=openai_key)
 
-        return qa_chain
+    if not os.path.exists(faiss_path):
+        raise ValueError(f"FAISS index not found at {faiss_path}")
 
-    except Exception as e:
-        print(f"[get_qa_chain ERROR]: {e}")
-        raise e
 
+    vectorstore = FAISS.load_local(
+        faiss_path,
+        embeddings,
+        allow_dangerous_deserialization=True 
+    )
+    retriever = vectorstore.as_retriever(search_kwargs={"k": 5})
+
+    prompt_template = PromptTemplate.from_template("""
+    You are a document analyzer. Answer the question in detail based on the context.
+    If the question is not related to the document, reply with "I don't know".
+
+    Context:
+    {context}
+
+    Question: {question}
+    Answer:
+    """)
+
+    qa_chain = RetrievalQA.from_chain_type(
+        llm=llm,
+        retriever=retriever,
+        chain_type="stuff",
+        chain_type_kwargs={"prompt": prompt_template},
+        return_source_documents=True
+    )
+
+    return qa_chain
