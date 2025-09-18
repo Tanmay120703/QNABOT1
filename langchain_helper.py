@@ -14,33 +14,28 @@ from langchain.prompts import PromptTemplate
 
 load_dotenv()
 
-def extract_text(file_path):
-    """
-    Extracts text from PDF, DOCX, CSV, or TXT file.
-    """
-    ext = file_path.split(".")[-1].lower()
-    text = ""
+def extract_text(file_obj, filename):
+    ext = filename.split(".")[-1].lower()
 
     if ext == "pdf":
-        doc = fitz.open(file_path)
-        text = "".join([page.get_text() for page in doc])
+        from PyPDF2 import PdfReader
+        reader = PdfReader(file_obj)
+        text = ""
+        for page in reader.pages:
+            text += page.extract_text() or ""
+        return text
 
-    elif ext == "docx":
-        doc = docx.Document(file_path)
-        text = "\n".join([para.text for para in doc.paragraphs])
-
-    elif ext == "csv":
-        df = pd.read_csv(file_path)
-        text = df.to_string(index=False)
+    elif ext in ["docx", "doc"]:
+        import docx
+        doc = docx.Document(file_obj)
+        return "\n".join([para.text for para in doc.paragraphs])
 
     elif ext == "txt":
-        with open(file_path, "r", encoding="utf-8") as f:
-            text = f.read()
+        return file_obj.read().decode("utf-8")
 
     else:
         raise ValueError(f"Unsupported file type: {ext}")
 
-    return text
 
 
 def create_faiss_index(text, faiss_dir):
